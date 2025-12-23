@@ -3,11 +3,12 @@
  *
  * 📚 학습 포인트:
  * - Tool은 AI가 "실행"할 수 있는 액션
- * - inputSchema로 입력 파라미터 정의 (JSON Schema 형식)
- * - 각 Tool은 이름, 설명, 입력 스키마를 가짐
+ * - Zod 스키마로 입력 파라미터 정의 (타입 안전성)
+ * - registerTool()로 서버에 등록
  */
 
-import { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
 import {
   createNote,
   updateNote,
@@ -16,110 +17,25 @@ import {
 } from "../store/noteStore.js";
 
 /**
- * Tool 정의 목록
- * 📚 inputSchema는 JSON Schema 형식으로 작성
- */
-export const noteTools: Tool[] = [
-  {
-    name: "create_note",
-    description: "새로운 메모를 생성합니다. 제목과 내용을 입력받고, 선택적으로 태그를 추가할 수 있습니다.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        title: {
-          type: "string",
-          description: "메모 제목",
-        },
-        content: {
-          type: "string",
-          description: "메모 내용",
-        },
-        tags: {
-          type: "array",
-          items: { type: "string" },
-          description: "메모에 붙일 태그 목록 (선택)",
-        },
-      },
-      required: ["title", "content"],
-    },
-  },
-  {
-    name: "update_note",
-    description: "기존 메모를 수정합니다. 제목, 내용, 태그를 변경할 수 있습니다.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        id: {
-          type: "string",
-          description: "수정할 메모의 ID",
-        },
-        title: {
-          type: "string",
-          description: "새로운 제목 (선택)",
-        },
-        content: {
-          type: "string",
-          description: "새로운 내용 (선택)",
-        },
-        tags: {
-          type: "array",
-          items: { type: "string" },
-          description: "새로운 태그 목록 (선택)",
-        },
-      },
-      required: ["id"],
-    },
-  },
-  {
-    name: "delete_note",
-    description: "메모를 삭제합니다.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        id: {
-          type: "string",
-          description: "삭제할 메모의 ID",
-        },
-      },
-      required: ["id"],
-    },
-  },
-  {
-    name: "search_notes",
-    description: "키워드로 메모를 검색합니다. 제목, 내용, 태그에서 검색합니다.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        keyword: {
-          type: "string",
-          description: "검색 키워드",
-        },
-      },
-      required: ["keyword"],
-    },
-  },
-];
-
-/**
- * Tool 호출 핸들러
+ * 모든 Note Tools를 서버에 등록
  * 📚 학습 포인트:
- * - 클라이언트가 Tool을 호출하면 이 함수가 실행됨
- * - arguments에서 입력값을 추출하여 처리
- * - 결과는 content 배열로 반환 (text 또는 image 등)
+ * - registerTool(name, schema, handler) 형식
+ * - Zod로 inputSchema 정의하면 자동으로 JSON Schema로 변환
  */
-export async function handleToolCall(
-  name: string,
-  args: Record<string, unknown>
-): Promise<CallToolResult> {
-  switch (name) {
-    case "create_note": {
-      const { title, content, tags } = args as {
-        title: string;
-        content: string;
-        tags?: string[];
-      };
-
-      const note = createNote(title, content, tags);
+export function registerNoteTools(server: McpServer): void {
+  /**
+   * 메모 생성 Tool
+   */
+  server.tool(
+    "create_note",
+    "새로운 메모를 생성합니다. 제목과 내용을 입력받고, 선택적으로 태그를 추가할 수 있습니다.",
+    {
+      title: z.string().describe("메모 제목"),
+      content: z.string().describe("메모 내용"),
+      tags: z.array(z.string()).optional().describe("메모에 붙일 태그 목록 (선택)"),
+    },
+    async ({ title, content, tags }) => {
+      const note = createNote(title, content, tags || []);
 
       return {
         content: [
@@ -143,15 +59,21 @@ export async function handleToolCall(
         ],
       };
     }
+  );
 
-    case "update_note": {
-      const { id, title, content, tags } = args as {
-        id: string;
-        title?: string;
-        content?: string;
-        tags?: string[];
-      };
-
+  /**
+   * 메모 수정 Tool
+   */
+  server.tool(
+    "update_note",
+    "기존 메모를 수정합니다. 제목, 내용, 태그를 변경할 수 있습니다.",
+    {
+      id: z.string().describe("수정할 메모의 ID"),
+      title: z.string().optional().describe("새로운 제목 (선택)"),
+      content: z.string().optional().describe("새로운 내용 (선택)"),
+      tags: z.array(z.string()).optional().describe("새로운 태그 목록 (선택)"),
+    },
+    async ({ id, title, content, tags }) => {
       const note = updateNote(id, { title, content, tags });
 
       if (!note) {
@@ -190,9 +112,18 @@ export async function handleToolCall(
         ],
       };
     }
+  );
 
-    case "delete_note": {
-      const { id } = args as { id: string };
+  /**
+   * 메모 삭제 Tool
+   */
+  server.tool(
+    "delete_note",
+    "메모를 삭제합니다.",
+    {
+      id: z.string().describe("삭제할 메모의 ID"),
+    },
+    async ({ id }) => {
       const deleted = deleteNote(id);
 
       return {
@@ -210,9 +141,18 @@ export async function handleToolCall(
         isError: !deleted,
       };
     }
+  );
 
-    case "search_notes": {
-      const { keyword } = args as { keyword: string };
+  /**
+   * 메모 검색 Tool
+   */
+  server.tool(
+    "search_notes",
+    "키워드로 메모를 검색합니다. 제목, 내용, 태그에서 검색합니다.",
+    {
+      keyword: z.string().describe("검색 키워드"),
+    },
+    async ({ keyword }) => {
       const results = searchNotes(keyword);
 
       return {
@@ -228,7 +168,9 @@ export async function handleToolCall(
                   id: note.id,
                   title: note.title,
                   tags: note.tags,
-                  preview: note.content.substring(0, 100) + (note.content.length > 100 ? "..." : ""),
+                  preview:
+                    note.content.substring(0, 100) +
+                    (note.content.length > 100 ? "..." : ""),
                 })),
               },
               null,
@@ -238,16 +180,5 @@ export async function handleToolCall(
         ],
       };
     }
-
-    default:
-      return {
-        content: [
-          {
-            type: "text",
-            text: `알 수 없는 도구: ${name}`,
-          },
-        ],
-        isError: true,
-      };
-  }
+  );
 }

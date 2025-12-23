@@ -255,25 +255,34 @@ MCP는 이 프로토콜을 사용하여 Client와 Server 간에 통신합니다.
 
 ### 3.1 `src/index.ts` - 진입점
 
-MCP Server 인스턴스를 생성하고 요청 핸들러를 등록합니다.
+MCP Server 인스턴스를 생성하고 Tools, Resources, Prompts를 등록합니다.
 
 ```typescript
-const server = new Server(
-  { name: "mcp-notes-server", version: "1.0.0" },
-  { capabilities: { tools: {}, resources: {}, prompts: {} } }
-);
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+const server = new McpServer({
+  name: "mcp-notes-server",
+  version: "1.0.0",
+});
+
+// 각 모듈에서 등록 함수 호출
+registerNoteTools(server);
+registerNoteResources(server);
+registerNotePrompts(server);
+
+// 서버 시작
+const transport = new StdioServerTransport();
+await server.connect(transport);
 ```
 
-#### 등록된 핸들러
+#### 기존 API와 비교
 
-| 스키마 | 메서드 | 역할 | 호출 시점 |
-|--------|--------|------|----------|
-| `ListToolsRequestSchema` | `tools/list` | 사용 가능한 도구 목록 반환 | Host가 서버 연결 시 |
-| `CallToolRequestSchema` | `tools/call` | 도구 실행 | LLM이 Tool 사용 결정 시 |
-| `ListResourcesRequestSchema` | `resources/list` | 리소스 목록 반환 | Host가 서버 연결 시 |
-| `ReadResourceRequestSchema` | `resources/read` | 리소스 읽기 | LLM이 데이터 필요 시 |
-| `ListPromptsRequestSchema` | `prompts/list` | 프롬프트 목록 반환 | Host가 서버 연결 시 |
-| `GetPromptRequestSchema` | `prompts/get` | 프롬프트 생성 | 사용자가 프롬프트 선택 시 |
+| 기존 (Deprecated) | 최신 API (v1.12+) |
+|-------------------|-------------------|
+| `Server` 클래스 | `McpServer` 클래스 |
+| `setRequestHandler(Schema, handler)` | `tool()`, `registerResource()`, `registerPrompt()` |
+| JSON Schema 수동 정의 | Zod 스키마 (자동 변환) |
 
 #### 주의사항
 
@@ -301,21 +310,28 @@ console.log("[Debug] 메시지");    // ❌ MCP 통신 방해
 | `delete_note` | 메모 삭제 | `id` | - |
 | `search_notes` | 메모 검색 | `keyword` | - |
 
-#### Tool 정의 구조
+#### Tool 등록 방식 (최신 API)
 
 ```typescript
-{
-  name: "create_note",
-  description: "새로운 메모를 생성합니다...",  // LLM이 이 설명을 보고 Tool 선택
-  inputSchema: {           // JSON Schema 형식
-    type: "object",
-    properties: {
-      title: { type: "string", description: "메모 제목" },
-      content: { type: "string", description: "메모 내용" },
-      tags: { type: "array", items: { type: "string" } }
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+
+export function registerNoteTools(server: McpServer): void {
+  server.tool(
+    "create_note",                    // Tool 이름
+    "새로운 메모를 생성합니다...",      // 설명 (LLM이 이걸 보고 Tool 선택)
+    {                                  // Zod 스키마 (자동으로 JSON Schema로 변환)
+      title: z.string().describe("메모 제목"),
+      content: z.string().describe("메모 내용"),
+      tags: z.array(z.string()).optional().describe("태그 목록"),
     },
-    required: ["title", "content"]
-  }
+    async ({ title, content, tags }) => {  // 핸들러 (타입 자동 추론)
+      const note = createNote(title, content, tags || []);
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: true, note }) }]
+      };
+    }
+  );
 }
 ```
 
@@ -350,17 +366,37 @@ return {
 | `notes://list` | 전체 메모 목록 | 모든 메모 요약 정보 |
 | `notes://note/{id}` | 개별 메모 상세 | 특정 메모 전체 내용 |
 
-#### URI 파싱 방식
+#### Resource 등록 방식 (최신 API)
 
 ```typescript
-const url = new URL(uri);  // "notes://list" 또는 "notes://note/abc123"
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-if (url.host === "list") {
-  // 전체 목록 반환
-}
-if (url.host === "note") {
-  const noteId = url.pathname.slice(1);  // "/abc123" → "abc123"
-  // 개별 메모 반환
+export function registerNoteResources(server: McpServer): void {
+  // 정적 리소스
+  server.registerResource(
+    "notes-list",           // 내부 식별자
+    "notes://list",         // URI
+    {
+      title: "메모 목록",
+      description: "저장된 모든 메모의 목록",
+      mimeType: "application/json",
+    },
+    async (uri) => ({
+      contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(data) }]
+    })
+  );
+
+  // 동적 리소스 (URI 템플릿)
+  server.registerResource(
+    "note-by-id",
+    new ResourceTemplate("notes://note/{noteId}", { list: listNoteResources }),
+    { title: "개별 메모", description: "특정 ID의 메모", mimeType: "application/json" },
+    async (uri, variables) => {
+      const noteId = variables.noteId as string;
+      const note = getNote(noteId);
+      return { contents: [{ uri: uri.href, text: JSON.stringify(note) }] };
+    }
+  );
 }
 ```
 
@@ -396,16 +432,31 @@ return {
 | `extract_tags` | 태그 추출 제안 | `noteId` | `maxTags` (기본: 5) |
 | `organize_notes` | 전체 메모 정리 제안 | - | - |
 
-#### Prompt 정의 구조
+#### Prompt 등록 방식 (최신 API)
 
 ```typescript
-{
-  name: "summarize_note",
-  description: "선택한 메모의 내용을 요약합니다.",
-  arguments: [
-    { name: "noteId", description: "요약할 메모의 ID", required: true },
-    { name: "style", description: "요약 스타일", required: false }
-  ]
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+
+export function registerNotePrompts(server: McpServer): void {
+  server.registerPrompt(
+    "summarize_note",
+    {
+      title: "메모 요약",
+      description: "선택한 메모의 내용을 요약합니다.",
+      argsSchema: {
+        noteId: z.string().describe("요약할 메모의 ID"),
+        style: z.enum(["brief", "detailed", "bullet"]).optional(),
+      },
+    },
+    async ({ noteId, style = "brief" }) => {
+      const note = getNote(noteId);
+      return {
+        description: `"${note.title}" 메모 요약`,
+        messages: [{ role: "user", content: { type: "text", text: `요약해주세요: ${note.content}` }}]
+      };
+    }
+  );
 }
 ```
 
@@ -718,19 +769,47 @@ console.error("[Debug] 변수값:", variable);
 
 ### 새 Tool 추가하기
 
-1. `noteTools.ts`의 `noteTools` 배열에 정의 추가
-2. `handleToolCall()` switch문에 케이스 추가
-3. 필요시 `noteStore.ts`에 함수 추가
+```typescript
+// noteTools.ts의 registerNoteTools() 함수 내에 추가
+server.tool(
+  "new_tool_name",
+  "도구 설명",
+  { param: z.string().describe("파라미터 설명") },
+  async ({ param }) => {
+    // 로직 구현
+    return { content: [{ type: "text", text: "결과" }] };
+  }
+);
+```
 
 ### 새 Resource 추가하기
 
-1. `listResources()`에서 리소스 정의 추가
-2. `readResource()`에서 URI 파싱 및 처리 추가
+```typescript
+// noteResources.ts의 registerNoteResources() 함수 내에 추가
+server.registerResource(
+  "resource-name",
+  "custom://uri",
+  { title: "리소스 제목", description: "설명" },
+  async (uri) => ({ contents: [{ uri: uri.href, text: "데이터" }] })
+);
+```
 
 ### 새 Prompt 추가하기
 
-1. `notePrompts` 배열에 정의 추가
-2. `getPrompt()` switch문에 케이스 추가
+```typescript
+// notePrompts.ts의 registerNotePrompts() 함수 내에 추가
+server.registerPrompt(
+  "new_prompt",
+  {
+    title: "프롬프트 제목",
+    description: "프롬프트 설명",
+    argsSchema: { arg: z.string().describe("인자 설명") },
+  },
+  async ({ arg }) => ({
+    messages: [{ role: "user", content: { type: "text", text: `프롬프트: ${arg}` }}]
+  })
+);
+```
 
 ### Host 설정 (Claude Desktop 예시)
 
