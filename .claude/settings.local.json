@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__serena__list_dir",
+      "mcp__mcp-notes-server__create_note",
+      "Bash(npm run build:*)"
+    ]
+  }
+}

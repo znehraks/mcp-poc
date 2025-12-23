@@ -1,0 +1,19 @@
+{
+  "name": "mcp-notes-server",
+  "version": "1.0.0",
+  "description": "MCP 학습용 간단한 메모장 서버 - Tool, Resource, Prompt 예제",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}

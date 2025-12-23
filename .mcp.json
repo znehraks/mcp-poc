@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "mcp-notes-server": {
+      "command": "node",
+      "args": ["/Users/youjungmin/Documents/workspace/miridih/mcp-poc/mcp-notes-server/dist/index.js"]
+    }
+  }
+}
