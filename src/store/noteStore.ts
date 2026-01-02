@@ -49,6 +49,8 @@ let idCounter = 0;
 
 /**
  * 데이터 디렉토리 확인 및 생성
+ * @description DATA_DIR이 존재하지 않으면 재귀적으로 생성
+ * @returns {void}
  */
 function ensureDataDir(): void {
   if (!existsSync(DATA_DIR)) {
@@ -59,6 +61,8 @@ function ensureDataDir(): void {
 
 /**
  * 파일에서 데이터 로드
+ * @description JSON 파일에서 메모 데이터를 읽어 인메모리 Map에 로드
+ * @returns {void}
  */
 function loadFromFile(): void {
   ensureDataDir();
@@ -92,6 +96,8 @@ function loadFromFile(): void {
 
 /**
  * 파일에 데이터 저장
+ * @description 인메모리 Map의 메모 데이터를 JSON 파일로 영속화
+ * @returns {void}
  */
 function saveToFile(): void {
   ensureDataDir();
@@ -116,13 +122,21 @@ function saveToFile(): void {
 // 서버 시작 시 데이터 로드
 loadFromFile();
 
-// ID 생성 헬퍼
+/**
+ * 고유 ID 생성 헬퍼
+ * @description 카운터와 타임스탬프를 조합하여 고유한 메모 ID 생성
+ * @returns {string} 생성된 고유 ID (예: "note_1_1735804800000")
+ */
 function generateId(): string {
   return `note_${++idCounter}_${Date.now()}`;
 }
 
 /**
  * 새 메모 생성
+ * @param {string} title - 메모 제목
+ * @param {string} content - 메모 내용
+ * @param {string[]} [tags=[]] - 메모에 붙일 태그 배열 (선택)
+ * @returns {Note} 생성된 메모 객체
  */
 export function createNote(title: string, content: string, tags: string[] = []): Note {
   const id = generateId();
@@ -144,6 +158,8 @@ export function createNote(title: string, content: string, tags: string[] = []):
 
 /**
  * 메모 조회
+ * @param {string} id - 조회할 메모의 ID
+ * @returns {Note | undefined} 메모 객체 또는 undefined (없을 경우)
  */
 export function getNote(id: string): Note | undefined {
   return notes.get(id);
@@ -151,6 +167,7 @@ export function getNote(id: string): Note | undefined {
 
 /**
  * 전체 메모 목록 조회
+ * @returns {Note[]} 최신 수정순으로 정렬된 전체 메모 배열
  */
 export function getAllNotes(): Note[] {
   return Array.from(notes.values()).sort(
@@ -160,6 +177,12 @@ export function getAllNotes(): Note[] {
 
 /**
  * 메모 수정
+ * @param {string} id - 수정할 메모의 ID
+ * @param {Object} updates - 수정할 필드들
+ * @param {string} [updates.title] - 새로운 제목 (선택)
+ * @param {string} [updates.content] - 새로운 내용 (선택)
+ * @param {string[]} [updates.tags] - 새로운 태그 배열 (선택)
+ * @returns {Note | undefined} 수정된 메모 객체 또는 undefined (없을 경우)
  */
 export function updateNote(
   id: string,
@@ -181,6 +204,8 @@ export function updateNote(
 
 /**
  * 메모 삭제
+ * @param {string} id - 삭제할 메모의 ID
+ * @returns {boolean} 삭제 성공 여부 (true: 삭제됨, false: 메모 없음)
  */
 export function deleteNote(id: string): boolean {
   const result = notes.delete(id);
@@ -192,6 +217,8 @@ export function deleteNote(id: string): boolean {
 
 /**
  * 키워드로 메모 검색
+ * @param {string} keyword - 검색할 키워드 (대소문자 무시)
+ * @returns {Note[]} 제목, 내용, 태그에서 키워드가 포함된 메모 배열
  */
 export function searchNotes(keyword: string): Note[] {
   const lowerKeyword = keyword.toLowerCase();

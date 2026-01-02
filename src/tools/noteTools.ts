@@ -22,6 +22,8 @@ import {
  * - registerTool(name, options, handler) 형식 (최신 API)
  * - options에 title, description, inputSchema, outputSchema 포함
  * - structuredContent로 타입 안전한 응답 반환
+ * @param {McpServer} server - Tool을 등록할 MCP 서버 인스턴스
+ * @returns {void}
  */
 export function registerNoteTools(server: McpServer): void {
   /**

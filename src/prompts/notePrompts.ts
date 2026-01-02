@@ -16,13 +16,15 @@ import { getNote, getAllNotes } from "../store/noteStore.js";
  * 📚 학습 포인트:
  * - server.registerPrompt()로 프롬프트 등록
  * - Zod로 argsSchema 정의하면 자동으로 JSON Schema로 변환
+ * @param {McpServer} server - Prompt를 등록할 MCP 서버 인스턴스
+ * @returns {void}
  */
 export function registerNotePrompts(server: McpServer): void {
   /**
    * 메모 요약 프롬프트
    */
   server.registerPrompt(
-    "summarize_note",
+    "summarize_note", 
     {
       title: "메모 요약",
       description: "선택한 메모의 내용을 요약합니다.",

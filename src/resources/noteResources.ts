@@ -15,6 +15,8 @@ import { getAllNotes, getNote } from "../store/noteStore.js";
  * 📚 학습 포인트:
  * - server.registerResource()로 정적 리소스 등록
  * - ResourceTemplate으로 동적 URI 패턴 등록
+ * @param {McpServer} server - Resource를 등록할 MCP 서버 인스턴스
+ * @returns {void}
  */
 export function registerNoteResources(server: McpServer): void {
   /**
@@ -105,8 +107,16 @@ export function registerNoteResources(server: McpServer): void {
 /**
  * 동적 리소스 목록 생성
  * 📚 ResourceTemplate의 list 콜백으로 사용
+ * @returns {Promise<{resources: Array<{uri: string, name: string, description: string, mimeType: string}>}>} 메모 리소스 목록 객체
  */
-async function listNoteResources() {
+async function listNoteResources(): Promise<{
+  resources: Array<{
+    uri: string;
+    name: string;
+    description: string;
+    mimeType: string;
+  }>;
+}> {
   const notes = getAllNotes();
 
   return {

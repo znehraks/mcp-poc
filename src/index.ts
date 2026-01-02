@@ -42,8 +42,10 @@ registerNotePrompts(server);
  * 📚 학습 포인트:
  * - StdioServerTransport: 표준 입출력으로 통신
  * - 다른 옵션: StreamableHTTPServerTransport (HTTP), SSE 등
+ * @returns {Promise<void>} 서버 연결이 완료되면 resolve
+ * @throws {Error} 서버 연결 실패 시 에러 발생
  */
-async function main() {
+async function main(): Promise<void> {
   console.error("=== MCP 메모장 서버 시작 ===");
   console.error("Tools: create_note, update_note, delete_note, search_notes");
   console.error("Resources: notes://list, notes://note/{id}");
